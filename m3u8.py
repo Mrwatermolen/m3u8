@@ -4,7 +4,7 @@ import os
 import time
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-DEBUGMODE = True
+DEBUGMODE = False
 # Only run on Linux
 
 

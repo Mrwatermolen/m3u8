@@ -17,11 +17,11 @@ for i in fast_table:
     index[x] = int(input(f"{fast_table[i]} index"))
     print(fast_table[i][index[x]] + "\n")
     x += 1
-
+#PLAYER._DownloadMonitor.context.dataset.currentVideoUrl
 dir = fast_table["vedio_save_path"][index[1]]
 file_name = fast_table["work_name"][index[0]]
-info = fast_table["resolution"][index[2]] + "." + fast_table["vedio_encode"][index[3]
-                                                                             ] + "." + fast_table["audio_encode"][index[4]] + '-' + fast_table["maker"][index[5]]
+info = fast_table["resolution"][index[2]] + "." + fast_table["source"][index[3]] + "." + fast_table["vedio_encode"][index[4]
+                                                                                                                    ] + "." + fast_table["audio_encode"][index[5]] + '-' + fast_table["maker"][index[6]]
 print(info)
 isAuto = False
 n = 2
