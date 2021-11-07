@@ -1,7 +1,7 @@
 # -*- coding:utf-
 
-from sys import prefix
 import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from Crypto.Cipher import AES  # pip3 install pycryptodome
 
 from contextlib import closing
@@ -9,46 +9,10 @@ import binascii
 import os
 import time
 import json
-# from requests import status_codes
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-
-class ProgressBar(object):
-
-    def __init__(self, title,
-                 count=0.0,
-                 run_status=None,
-                 fin_status=None,
-                 total=100.0,
-                 unit='', sep='/',
-                 chunk_size=1.0):
-        super(ProgressBar, self).__init__()
-        self.info = "【%s】%s %.2f %s %s %.2f %s"
-        self.title = title
-        self.total = total
-        self.count = count
-        self.chunk_size = chunk_size
-        self.status = run_status or ""
-        self.fin_status = fin_status or " " * len(self.status)
-        self.unit = unit
-        self.seq = sep
-
-    def __get_info(self):
-        # 【名称】状态 进度 单位 分割线 总数 单位
-        _info = self.info % (self.title, self.status,
-                             self.count/self.chunk_size, self.unit, self.seq, self.total/self.chunk_size, self.unit)
-        return _info
-
-    def refresh(self, count=1, status=None):
-        self.count += count
-        # if status is not None:
-        self.status = status or self.status
-        end_str = "\r"
-        if self.count >= self.total:
-            end_str = '\n'
-            self.status = status or self.fin_status
-        print(self.__get_info(), end=end_str)
+import ProgressBar
 
 
 class DecodeM3u8File:
@@ -162,14 +126,20 @@ class DecodeM3u8File:
 # https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/
 # https://cf-ipfs.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.key
 if __name__ == '__main__':
-    with open(file=os.path.join(os.getcwd(), "config.json"), mode="r") as f:
+    """ with open(file=os.path.join(os.getcwd(), "config.json"), mode="r") as f:
         config = json.load(f)
         print(config)
     vedio_name = config["vedio_name"]
     m3u8_url = config["m3u8_url"]
     save_path = config["save_path"]
     prefix_url = config["prefix_url"]
-    key_url = config["key_url"]
+    key_url = config["key_url"] """
+    vedio_name = ""
+    m3u8_url = "https://i.baobuzz.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.m3u8"
+    m3u8_file = ""
+    save_path = "C:\\Users\\My computer\\桌面\\2"
+    prefix_url = "https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/"
+    key_url = "https://cf-ipfs.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.key"
     try:
         if not os.path.exists(save_path):
             os.mkdir(save_path)
