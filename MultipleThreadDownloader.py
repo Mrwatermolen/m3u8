@@ -22,15 +22,13 @@ class MultipleThreadDownloader(object):
         self.file_size = file_size
         self.cryptor = cryptor
 
-        self.bar = tqdm(total=file_size, desc=f'download file：{file_name}')
-
     def get_range(self):
 
         # Whether it can be to split
         if self.file_size == 0:
             res = requests.head(self.url)
             file_size = int(res.headers.get('Content-Length'))
-            if file_size is None or res.get('Accept-Ranges') is None:
+            if file_size is None:
                 raise ValueError("This file does not support MTD!")
             self.file_size = file_size
 
@@ -62,7 +60,7 @@ class MultipleThreadDownloader(object):
                     data.append(chunk)
                 else:
                     data.append(self.cryptor(chunk))
-                self.bar.update(chunk_size)
+                self.bar.update(1)
             download_succeed = True
         except Exception as e:
             download_succeed = False
@@ -89,10 +87,12 @@ class MultipleThreadDownloader(object):
         prepare_file.truncate(self.file_size)  # d
         prepare_file.close()
         thread_list = []
-        print(type(self.cryptor))
+        parts = self.get_range()
+        self.bar = tqdm(total=(self.file_size/1024), desc=f'download file：{self.file_name}')
+        # print(type(self.cryptor))
 
         # assign block
-        for ran in self.get_range():
+        for ran in parts:
             start, end = ran
             thread = threading.Thread(
                 target=self.single_thread_download, args=(start, end))

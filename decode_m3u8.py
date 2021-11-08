@@ -1,6 +1,6 @@
 # -*- coding:utf-
 
-from MultipleThreadDownloader import MultipleThreadDownloader
+from multipleThreadDownloader import MultipleThreadDownloader
 from contextlib import closing
 import binascii
 import os
@@ -15,6 +15,20 @@ from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+def download_from_playlist(playlist, save_path, start_line=None, end_line=None, cryptor=None):
+    
+    with open(playlist, 'r') as f:
+        url_list = f.readlines()
+        start_line = start_line or 0
+        end_line = end_line or len(url_list)
+        
+        for index, url in enumerate(url_list):
+            url = url.replace('\n', '')
+            ts_name = str(index).zfill(4) + '.ts'
+            if start_line <= index and index < end_line:
+                downloader = MultipleThreadDownloader(
+                    url=url, save_path=save_path, file_name=ts_name, cryptor=cryptor)
+                downloader.run()
 
 class DecodeM3u8File:
     def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name):
@@ -84,12 +98,12 @@ class DecodeM3u8File:
                 self.total_size += int(file_size)
                 d = time.time()
                 print(
-                    f"total number: {len(self.play_list)}, cur {index + 1} ts size: {file_size}. spent {d - c}")
+                    f"total number: {len(self.play_list)}, cur {index + 1} ts size: {(int(file_size)/1024.0):05.2f} KB. spent {(d - c):05.2f} seconds")
         b = time.time()
         print(
-            f"m3u8 analyzes finished! spent time: {b - a} start to download {self.total_size}.")
+            f"m3u8 analyzes finished! spent time: {(b - a):05.2f} start to download {(self.total_size/1024.0):05.2f}.")
 
-        self.bar = tqdm(total=self.total_size,
+        self.bar = tqdm(total=self.total_size/1024,
                         desc=f'download file：{self.vedio_name}')
 
         # try to download
@@ -103,7 +117,7 @@ class DecodeM3u8File:
                             file_name=file_name, ts_size=self.ts_size[index])
                 with open(os.path.join(self.save_path, "megreList.txt"), 'a') as m:
                     m.write(f"file '{file_name + '.ts'}'\n")
-                self.bar.update(self.ts_size[index])
+                self.bar.update(self.ts_size[index]/1024)
             except Exception as e:
                 self.ts_finish[index] = False
                 err = f"ts: {file_name} download fail! Error: {e}"
@@ -165,10 +179,10 @@ if __name__ == '__main__':
     prefix_url = config["prefix_url"]
     key_url = config["key_url"] """
     vedio_name = "ddd"
-    m3u8_url = "https://apd-1d2464b12152daa655168a677415669f.v.smtcdns.com/moviets.tc.qq.com/ADtN6YlGKXxLzypWSt2PBq45qk7LOKkTyQyneDpqwhgo/uwMROfz2r5zAoaQXGdGnC2df640tLXo7PSye_fYKJIXUjbVS/sGGIZl1fKyFJ_bbhBQC0Pqx5_DyDMl_VEZT3C0DkFt3-z1-rrFpmFK10yGozsgVqVN8vKkX2ME1mCE7PEqx4C2yIkbBX6oD4s9qhHLB_LykA8mtpFF31Z5mKwUzK4fDfVJMwQAxpNoKQ3ySMntmOMFzxvP0zvLd2H8T0ySjBnwLyuWJD_Hc9Mg/v0032sn0o61.321001.ts.m3u8"
-    m3u8_file = ""
-    save_path = "C:\\Users\\My computer\\桌面\\2"
-    prefix_url = "https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/"
+    m3u8_url = 'https://apd-02596eb132b076606cf80b1ec9362bff.v.smtcdns.com/moviets.tc.qq.com/ArRqnbPdr4VtReSEllZn5hqZmOxpXV8aPicKOUPOT9jY/uwMROfz2r5zAoaQXGdGnC2df640tLXo7PSye_fYKJIXUjbVS/KYcPGzj17E8sA4ETxlGIGx9dn1iX7uCaExogabgP6mNFKOhSYJYjXKX_dW_9M8WMf492Tfppe36o_n-Jgsq0v2mrnVGCTLIljt3sjuPnQIltwI18Ka9iyWs2qeLIovauAhgIc_4VW_pOYmondPXP-DOH6TMyjKeHbcA7hlL3CePo-DyOK0Ae6g/v0032sn0o61.321001.ts.m3u8'
+    m3u8_file = ''
+    save_path = "C:\\Users\\Public\\1"
+    prefix_url = ''
     key_url = "https://cf-ipfs.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.key"
     try:
         if not os.path.exists(save_path):
@@ -177,7 +191,7 @@ if __name__ == '__main__':
         Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
                                     prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name)
         Downloader.analyze_m3u8_url()
-        # Downloader.megre_mp4(vedio_name)
+        Downloader.megre_mp4(vedio_name) # save path cann't include ' '
         end_time = time.time()
         print(f"[Message] Running time: {int(end_time - start_time)} Seconds")
     except BaseException as e:
