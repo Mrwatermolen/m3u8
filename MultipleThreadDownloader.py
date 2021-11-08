@@ -13,13 +13,15 @@ lock = threading.Lock()
 
 
 class MultipleThreadDownloader(object):
-    def __init__(self, url, save_path, file_name, thread_num=12, file_size=0):
+    def __init__(self, url, save_path, file_name, thread_num=12, file_size=0, cryptor=None):
         super(MultipleThreadDownloader, self).__init__()
         self.url = url
         self.save_path = save_path
         self.file_name = file_name
         self.thread_num = thread_num
         self.file_size = file_size
+        self.cryptor = cryptor
+
         self.bar = tqdm(total=file_size, desc=f'download file：{file_name}')
 
     def get_range(self):
@@ -49,17 +51,23 @@ class MultipleThreadDownloader(object):
         }
         download_succeed = False
         data = []
+        msg = ''
 
         try:
             requests.adapters.DEFAULT_RETRIES = 10  # set times of recoonection
             res = requests.get(self.url, stream=True, headers=headers)
             for chunk in res.iter_content(chunk_size=chunk_size):
-                data.append(chunk)
+                if self.cryptor is None:
+                    data.append(chunk)
+                else:
+                    data.append(self.cryptor(chunk))
                 self.bar.update(chunk_size)
             download_succeed = True
         except Exception as e:
             download_succeed = False
-            print(f"block: {start}-{end} occurs errors! Error: {e}")
+            msg = f"block: {start}-{end} occurs errors! Error: {e}"
+            print(msg)
+            
 
         if download_succeed:
             with lock:  # Process lock protects file from being wrote in same time, but actually it can be commented out because local variable is safe
@@ -68,6 +76,8 @@ class MultipleThreadDownloader(object):
                     file.seek(start)
                     for temp in data:
                         file.write(temp)
+        else:
+            raise BaseException(msg)
 
     def run(self):
 
@@ -90,11 +100,11 @@ class MultipleThreadDownloader(object):
             i.join()
 
 
-if __name__ == '__main__':
+""" if __name__ == '__main__':
     url = 'https://issuecdn.baidupcs.com/issue/netdisk/yunguanjia/BaiduNetdisk_7.2.8.9.exe'
     save_path = 'C:\\Users\\My computer\\桌面\\3'
     file_name = 'BaiduNetdisk_7.2.8.9.exe'
     file_size = int(requests.head(url).headers.get('Content-Length'))
     test = MultipleThreadDownloader(
         url=url, save_path=save_path, file_name=file_name, file_size=file_size)
-    test.run()
+    test.run() """
