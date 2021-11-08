@@ -1,10 +1,12 @@
 # -*- coding:utf-
 
+from MultipleThreadDownloader import MultipleThreadDownloader
 from contextlib import closing
 import binascii
 import os
 import time
 import json
+import re
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -13,7 +15,6 @@ from tqdm import tqdm
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-from MultipleThreadDownloader import MultipleThreadDownloader
 
 class DecodeM3u8File:
     def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name):
@@ -30,6 +31,7 @@ class DecodeM3u8File:
         self.ts_size = []
         self.total_size = 0
         self.ts_finish = []
+        self.cryptor = None
         self.headers = {
             'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'}
 
@@ -55,7 +57,7 @@ class DecodeM3u8File:
                 key_url_start = line.find("URI=")
                 key_url_end = line.find(",", key_url_start)
                 print(line[key_url_start:key_url_end])
-                self.__get_decrypted_key()
+                self.get_decrypted_key()
             # get real url
             if "#EXTINF" in line:
                 is_in_header = False
@@ -81,17 +83,23 @@ class DecodeM3u8File:
                 self.ts_size.append(int(file_size))
                 self.total_size += int(file_size)
                 d = time.time()
-                print(f"total number: {len(self.play_list)}, cur {index + 1} ts size: {file_size}. spent {d - c}")
+                print(
+                    f"total number: {len(self.play_list)}, cur {index + 1} ts size: {file_size}. spent {d - c}")
         b = time.time()
-        print(f"m3u8 analyzes finished! spent time: {b - a} start to download {self.total_size}.")
+        print(
+            f"m3u8 analyzes finished! spent time: {b - a} start to download {self.total_size}.")
 
-        self.bar = tqdm(total=self.total_size,desc=f'download file：{self.vedio_name}')
+        self.bar = tqdm(total=self.total_size,
+                        desc=f'download file：{self.vedio_name}')
 
         # try to download
+        error_log = open(os.path.join(self.save_path, 'error.log'), 'w')
+        error_log,os.close
+        parts = {}
         for index, real_url in enumerate(self.play_list):
             file_name = str(index).zfill(4)
             try:
-                self.get_ts(real_url=real_url,
+                self.get_ts(url=real_url,
                             file_name=file_name, ts_size=self.ts_size[index])
                 with open(os.path.join(self.save_path, "megreList.txt"), 'a') as m:
                     m.write(f"file '{file_name + '.ts'}'\n")
@@ -100,12 +108,24 @@ class DecodeM3u8File:
                 self.ts_finish[index] = False
                 err = f"ts: {file_name} download fail! Error: {e}"
                 print(err)
+                # error_log.write(err)
+                # error_log.write('/n')
+                # parts.append({f'{index}':}})
 
-    def get_ts(self, real_url, file_name, ts_size):
+        # retry
+        ''' i = 0
+        for index, real_url in enumerate(self.play_list):
+            if not self.ts_finish[index]:
+                file_name = str(index).zfill(4) '''
+
+    def get_ts(self, url, file_name, ts_size, start=None, end=None):
         ts_name = file_name + ".ts"
         downloader = MultipleThreadDownloader(
-            url=real_url, save_path=self.save_path, file_name=ts_name, file_size=ts_size)
-        downloader.run()
+            url=url, save_path=self.save_path, file_name=ts_name, file_size=ts_size, cryptor=self.cryptor)
+        if start is None and end is None:
+            downloader.run()
+        else:
+            downloader.single_thread_download(start=start, end=end)
 
     def megre_mp4(self, vedio_name):
         megre_list = os.path.join(self.save_path, "megreList.txt")
@@ -115,7 +135,7 @@ class DecodeM3u8File:
         print(command)
         os.system(command)
 
-    def __get_decrypted_key(self):
+    def get_decrypted_key(self):
         r = requests.get(url=self.key_url, verify=False)
         if r.status_code == 200:
             # key文件是一个二进制字节文件,读取后类型为bytes,该函数将其转为16字节的16进制字符串
@@ -125,9 +145,9 @@ class DecodeM3u8File:
             print(f"Key is :{binascii.b2a_hex(self.key).decode()}\n")
             with open(os.path.join(self.save_path, "key.key"), "wb") as f:
                 f.write(r.content)
-            self.__creat_cryptor()
+            self.cryptor = self.creat_cryptor()
 
-    def __creat_cryptor(self, mode="aes-128-cbc", vi=None):
+    def creat_cryptor(self, mode="aes-128-cbc", vi=None):
         if vi is None:
             vi = self.key
         if mode == "aes-128-cbc":

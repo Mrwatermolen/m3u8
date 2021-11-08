@@ -65,9 +65,8 @@ class MultipleThreadDownloader(object):
             download_succeed = True
         except Exception as e:
             download_succeed = False
-            msg = f"block: {start}-{end} occurs errors! Error: {e}"
+            msg = f"file:{self.file_name} block: {start}-{end} occurs errors! Error: {e}"
             print(msg)
-            
 
         if download_succeed:
             with lock:  # Process lock protects file from being wrote in same time, but actually it can be commented out because local variable is safe
@@ -77,7 +76,10 @@ class MultipleThreadDownloader(object):
                     for temp in data:
                         file.write(temp)
         else:
-            raise BaseException(msg)
+            error_log = open(os.path.join(self.save_path, 'error.log'), 'a')
+            error_log.write(msg)
+            error_log.close()
+            # raise BaseException(msg)
 
     def run(self):
 
@@ -86,6 +88,7 @@ class MultipleThreadDownloader(object):
         prepare_file.truncate(self.file_size)  # d
         prepare_file.close()
         thread_list = []
+        print(type(self.cryptor))
 
         # assign block
         for ran in self.get_range():
