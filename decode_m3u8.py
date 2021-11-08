@@ -22,7 +22,7 @@ class DecodeM3u8File:
         self.m3u8_file = m3u8_file
         self.m3u8_url = m3u8_url
         self.save_path = save_path
-        self.prefix_url = prefix_url
+        self.prefix_url = prefix_url or m3u8_url.replace(m3u8_url.rsplit('/', 1)[-1], "")
         self.key_url = key_url
         self.vedio_name = vedio_name
 
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     prefix_url = config["prefix_url"]
     key_url = config["key_url"] """
     vedio_name = "ddd"
-    m3u8_url = "https://i.baobuzz.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.m3u8"
+    m3u8_url = "https://apd-1d2464b12152daa655168a677415669f.v.smtcdns.com/moviets.tc.qq.com/ADtN6YlGKXxLzypWSt2PBq45qk7LOKkTyQyneDpqwhgo/uwMROfz2r5zAoaQXGdGnC2df640tLXo7PSye_fYKJIXUjbVS/sGGIZl1fKyFJ_bbhBQC0Pqx5_DyDMl_VEZT3C0DkFt3-z1-rrFpmFK10yGozsgVqVN8vKkX2ME1mCE7PEqx4C2yIkbBX6oD4s9qhHLB_LykA8mtpFF31Z5mKwUzK4fDfVJMwQAxpNoKQ3ySMntmOMFzxvP0zvLd2H8T0ySjBnwLyuWJD_Hc9Mg/v0032sn0o61.321001.ts.m3u8"
     m3u8_file = ""
     save_path = "C:\\Users\\My computer\\桌面\\2"
     prefix_url = "https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/"

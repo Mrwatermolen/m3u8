@@ -28,9 +28,9 @@ class MultipleThreadDownloader(object):
 
         # Whether it can be to split
         if self.file_size == 0:
-            file_size = int(requests.head(
-                self.url).headers.get('Content-Length'))
-            if file_size is None:
+            res = requests.head(self.url)
+            file_size = int(res.headers.get('Content-Length'))
+            if file_size is None or res.get('Accept-Ranges') is None:
                 raise ValueError("This file does not support MTD!")
             self.file_size = file_size
 
@@ -55,6 +55,7 @@ class MultipleThreadDownloader(object):
 
         try:
             requests.adapters.DEFAULT_RETRIES = 10  # set times of recoonection
+            s = requests.session()
             res = requests.get(self.url, stream=True, headers=headers)
             for chunk in res.iter_content(chunk_size=chunk_size):
                 if self.cryptor is None:
