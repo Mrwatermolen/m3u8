@@ -3,32 +3,37 @@
 import threading
 import os
 import time
-from contextlib import closing
-from requests.models import to_key_val_list
+from tkinter.constants import NO
 
 import requests
 from tqdm import tqdm
+from Crypto.Cipher import AES
 
 lock = threading.Lock()
 
 
 class MultipleThreadDownloader(object):
-    def __init__(self, url, save_path, file_name, thread_num=12, file_size=0, cryptor=None):
+    def __init__(self, url, save_path, file_name, thread_num=8, file_size=0, accept_ranges='Bytes', cryptor=None):
         super(MultipleThreadDownloader, self).__init__()
         self.url = url
         self.save_path = save_path
         self.file_name = file_name
         self.thread_num = thread_num
         self.file_size = file_size
+        self.accept_ranges = accept_ranges
         self.cryptor = cryptor
+
+        self.is_complete = True
 
     def get_range(self):
 
         # Whether it can be to split
         if self.file_size == 0:
             res = requests.head(self.url)
+            print(res.headers)
             file_size = int(res.headers.get('Content-Length'))
-            if file_size is None:
+            self.accept_ranges = res.headers.get('Accept-Ranges')
+            if file_size is None or self.accept_ranges is None:
                 raise ValueError("This file does not support MTD!")
             self.file_size = file_size
 
@@ -39,33 +44,33 @@ class MultipleThreadDownloader(object):
 
         return parts
 
-    def single_thread_download(self, start=None, end=None, chunk_size=1024):
+    def single_thread_download(self, start=None, end=None, chunk_size=1024, max_retry=10):
 
         # set header
+        # Range accept different arg such as bytes or Bytes. TT
         headers = {
             'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)',
-            'Range': f'Bytes={start}-{end}',
+            'Range': f'{self.accept_ranges}={start}-{end}',
             'Accept-Encoding': '*'
         }
         download_succeed = False
         data = []
         msg = ''
-
-        try:
-            requests.adapters.DEFAULT_RETRIES = 10  # set times of recoonection
-            s = requests.session()
-            res = requests.get(self.url, stream=True, headers=headers)
-            for chunk in res.iter_content(chunk_size=chunk_size):
-                if self.cryptor is None:
-                    data.append(chunk)
-                else:
-                    data.append(self.cryptor(chunk))
-                self.bar.update(1)
-            download_succeed = True
-        except Exception as e:
-            download_succeed = False
-            msg = f"file:{self.file_name} block: {start}-{end} occurs errors! Error: {e}"
-            print(msg)
+        while max_retry:
+            try:
+                requests.adapters.DEFAULT_RETRIES = 10  # set times of recoonection
+                # s = requests.session()
+                res = requests.get(self.url, stream=True, headers=headers)
+                for chunk in res.iter_content(chunk_size=chunk_size):    
+                    data.append(chunk)   
+                    self.bar.update(len(chunk)/chunk_size)
+                download_succeed = True
+                break
+            except Exception as e:
+                download_succeed = False
+                msg = f"file:{self.file_name} block: {start}-{end} occurs errors! Error: {e}\n"
+                print(msg)
+                max_retry -= 1
 
         if download_succeed:
             with lock:  # Process lock protects file from being wrote in same time, but actually it can be commented out because local variable is safe
@@ -75,9 +80,11 @@ class MultipleThreadDownloader(object):
                     for temp in data:
                         file.write(temp)
         else:
-            error_log = open(os.path.join(self.save_path, 'error.log'), 'a')
-            error_log.write(msg)
-            error_log.close()
+            with lock:
+                error_log = open(os.path.join(self.save_path, 'error.log'), 'a')
+                error_log.write(msg)
+                error_log.close()
+                self.is_complete = False
             # raise BaseException(msg)
 
     def run(self):
@@ -102,6 +109,13 @@ class MultipleThreadDownloader(object):
         # wait to pre thread finish
         for i in thread_list:
             i.join()
+
+        # Data must be padded to 16 byte boundary in CBC mode
+        if self.is_complete and not self.cryptor is None:
+            with open(os.path.join(self.save_path, self.file_name), 'rb') as f:
+                encryte_data = f.read()
+            with open(os.path.join(self.save_path, self.file_name), 'wb') as f:
+                f.write(self.cryptor.decrypt(encryte_data))
 
 
 """ if __name__ == '__main__':
