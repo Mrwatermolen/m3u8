@@ -18,14 +18,14 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 lock = threading.Lock()
 
-DEBUGMODE = True
+DEBUGMODE =True
 
 if DEBUGMODE:
     import tkinter
     from tkinter import filedialog
 
 
-""" def download_from_playlist(playlist, save_path, start_line=None, end_line=None, cryptor=None):
+def download_from_playlist(playlist, save_path, start_line=None, end_line=None, cryptor=None):
 
     with open(playlist, 'r') as f:
         url_list = f.readlines()
@@ -36,10 +36,11 @@ if DEBUGMODE:
         a.withdraw()
         key = None
         con = filedialog.askopenfilename()
-        with open(con, 'rb') as f:
-            key = f.read()
-        if not key is None:
-            cryptor = AES.new(key, AES.MODE_CBC, key)
+        if os.path.exists(con):
+            with open(con, 'rb') as f:
+                key = f.read()
+            if not key is None:
+                cryptor = AES.new(key, AES.MODE_CBC, key)
         for index, url in enumerate(url_list):
             url = url.replace('\n', '')
             ts_name = str(index).zfill(4) + '.ts'
@@ -52,7 +53,7 @@ if DEBUGMODE:
                 thread_list.append(thread)
 
         for i in thread_list:
-            i.join() """
+            i.join()
 
 
 class DecodeM3u8File:
@@ -60,7 +61,8 @@ class DecodeM3u8File:
     params:
         download_ts_nums: number of ts downloaded at the same time
     """
-    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=4):
+
+    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=1):
         super(DecodeM3u8File, self).__init__()
         self.m3u8_file = m3u8_file
         self.m3u8_url = m3u8_url
@@ -77,6 +79,7 @@ class DecodeM3u8File:
         self.total_size = 0
         self.ts_finish = []
         self.cryptor = None
+        self.accept_range = 'bytes'
         self.headers = {
             'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'}
 
@@ -119,21 +122,40 @@ class DecodeM3u8File:
         with open(os.path.join(self.save_path, "play_list.txt"), "w") as f:
             for index, url in enumerate(self.play_list):
                 c = time.time()
-                try:
-                    f.write(url)
-                    f.write("\n")
-                    r = requests.head(url, headers=self.headers)
-                    file_size = r.headers.get('Content-Length')
-                    if file_size is None:
-                        file_size = 0
-                    self.ts_size.append(int(file_size))
-                    self.total_size += int(file_size)
-                    d = time.time()
-                    print(
-                        f"total number: {len(self.play_list)}, cur {index + 1} ts size: {(int(file_size)/1024.0):05.2f} KB. spent {(d - c):05.2f} seconds")
-                except Exception as e:
-                    self.ts_size.append(None)
-                    print(f"cur {index + 1} ts error {e}")
+                max_retry = 10
+                while max_retry:
+                    try:
+                        r = requests.head(url,proxies={}) # first try to get header
+                        if r.status_code == 302:
+                            r.close()
+                            r = requests.head(url,proxies={},allow_redirects=True)
+                            url = r.history[-1].headers.get('location') # if not 302, history will don't exist!
+                        """ r = requests.head(url,proxies={},allow_redirects=True) # no header
+                        while r.status_code == 302:
+                            #  print(r)
+                            print(f"{r.headers.get('Content-Length')}  {r.headers.get('Accept-Ranges')}")
+                            # print(f"{r.headers.get('location')}")
+                            url = r.headers.get('location')
+                            r.close()
+                            r = requests.head(url) """
+                        file_size = r.headers.get('Content-Length')
+                        self.accept_range = r.headers.get('Accept-Ranges') or self.accept_range
+                        if file_size is None:
+                            file_size = 0
+                        self.ts_size.append(int(file_size))
+                        self.total_size += int(file_size)
+                        self.play_list[index] = url
+                        f.write(url)
+                        f.write("\n")
+                        d = time.time()
+                        # download progress should be there
+                        print(
+                            f"total number: {len(self.play_list)}, cur {index} ts size: {(int(file_size)/1024.0):05.2f} KB. spent {(d - c):05.2f} seconds")
+                        break
+                    except Exception as e:
+                        self.ts_size.append(0)
+                        print(f"cur {index} ts error {e}. remain retry times {max_retry - 1}")
+                        max_retry -= 1
         b = time.time()
         print(
             f"m3u8 analyzes finished! spent time: {(b - a):05.2f} start to download {(self.total_size/1024.0):07.2f}.")
@@ -220,22 +242,32 @@ if __name__ == '__main__':
     if DEBUGMODE:
         root = tkinter.Tk()
         root.withdraw()
-        vedio_name = "ddd"
-        m3u8_url = 'https://i.baobuzz.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.m3u8'
-        # m3u8_file = filedialog.askopenfilename()
+        vedio_name = config["vedio_name"]
+        m3u8_url = config["m3u8_url"]
+        m3u8_file = filedialog.askopenfilename()
         save_path = filedialog.askdirectory()
-        prefix_url = 'https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/'
-        key_url = "https://cf-ipfs.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.key"
+        prefix_url = config["prefix_url"]
+        key_url = config["key_url"]
         playlist = filedialog.askopenfilename()
+        try:
+            Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
+                                        prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name, download_ts_nums=1)
+            # Downloader.run()
 
-    try:
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
-        start_time = time.time()
-        Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
-                                    prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name)
-        Downloader.run()
-        end_time = time.time()
-        print(f"[Message] Running time: {int(end_time - start_time)} Seconds")
-    except BaseException as e:
-        print(e)
+            download_from_playlist(playlist=playlist,save_path=save_path,start_line=293,end_line=294)
+            Downloader.megre_mp4(vedio_name=vedio_name)
+        except Exception as e:
+            print(e)
+    else:
+        try:
+            if not os.path.exists(save_path):
+                os.mkdir(save_path)
+            start_time = time.time()
+            Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
+                                        prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name)
+            Downloader.run()
+            end_time = time.time()
+            print(
+                f"[Message] Running time: {int(end_time - start_time)} Seconds")
+        except BaseException as e:
+            print(e)

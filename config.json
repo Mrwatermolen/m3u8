@@ -1,7 +1,7 @@
 {
-    "vedio_name":"KMG",
-    "save_path": "/home/pi/share/testt",
-    "m3u8_file": "",
+    "vedio_name": "KMG",
+    "save_path": "C:\\Users\\Public\\1",
+    "m3u8_file": "C:\\Users\\Public\\1.m3u8",
     "m3u8_url": "https://i.baobuzz.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.m3u8",
     "prefix_url": "https://bafybeifzaozcmt4sxyprpjt27vokwtli5ega2frvyterpct3a3rxqjej7e.ipfs.dweb.link/",
     "key_url": "https://cf-ipfs.com/ipfs/QmansQHZzMetzPucghCVXdTkGD75NCrFxyJHZKm6TeP4Up/dan.key"
