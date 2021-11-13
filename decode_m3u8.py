@@ -1,5 +1,7 @@
 # -*- coding:utf-
 
+from tkinter.constants import FALSE
+from requests.api import head
 from multipleThreadDownloader import MultipleThreadDownloader
 from contextlib import closing
 import binascii
@@ -18,42 +20,53 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 lock = threading.Lock()
 
-DEBUGMODE =True
+DEBUGMODE = False
 
 if DEBUGMODE:
     import tkinter
     from tkinter import filedialog
 
 
-def download_from_playlist(playlist, save_path, start_line=None, end_line=None, cryptor=None):
-
+def download_from_playlist(playlist, save_path, start_line=None, end_line=None, key=None, cryptor=None, num=1):
     with open(playlist, 'r') as f:
         url_list = f.readlines()
         start_line = start_line or 0
         end_line = end_line or len(url_list)
+        download_urls = []
         thread_list = []
-        a = tkinter.Tk()
-        a.withdraw()
-        key = None
-        con = filedialog.askopenfilename()
-        if os.path.exists(con):
-            with open(con, 'rb') as f:
-                key = f.read()
-            if not key is None:
-                cryptor = AES.new(key, AES.MODE_CBC, key)
-        for index, url in enumerate(url_list):
-            url = url.replace('\n', '')
-            ts_name = str(index).zfill(4) + '.ts'
-            if start_line <= index and index < end_line:
+        if not key is None:
+            cryptor = AES.new(key, AES.MODE_CBC, key)
+
+        # for index, url in enumerate(url_list):
+        #     if start_line <= index and index < end_line:
+        #         ts_name = str(index).zfill(4) + '.ts'
+        #         download_urls.append((ts_name, url.replace('\n', '')))
+        #         downloader = MultipleThreadDownloader(
+        #             url=url, save_path=save_path, file_name=ts_name, cryptor=cryptor)
+        #         thread = threading.Thread(
+        #             target=downloader.run)
+        #         thread.start()
+        #         thread_list.append(thread)
+        counter = 0
+        for url in url_list[start_line:end_line:num]:
+            for index in range(0, num):
+                if (counter * num + start_line + index) >= end_line:
+                    break
+                ts_name = str(counter * num + start_line +
+                              index).zfill(4) + '.ts'
+                download_urls.append((ts_name, url.replace('\n', '')))
                 downloader = MultipleThreadDownloader(
-                    url=url, save_path=save_path, file_name=ts_name, cryptor=cryptor)
+                    url=url, save_path=save_path, file_name=ts_name, cryptor=cryptor, thread_num=4)
                 thread = threading.Thread(
                     target=downloader.run)
+
                 thread.start()
                 thread_list.append(thread)
-
-        for i in thread_list:
-            i.join()
+            for i in range(0, num):
+                if (i + counter * num) >= len(thread_list):
+                    break
+                thread_list[i + counter * num].join()
+            counter += 1
 
 
 class DecodeM3u8File:
@@ -62,7 +75,7 @@ class DecodeM3u8File:
         download_ts_nums: number of ts downloaded at the same time
     """
 
-    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=1):
+    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=4):
         super(DecodeM3u8File, self).__init__()
         self.m3u8_file = m3u8_file
         self.m3u8_url = m3u8_url
@@ -118,33 +131,38 @@ class DecodeM3u8File:
                         self.prefix_url + self.file_line[index + 1])
 
         # analyze vedio and record
-        a = time.time()
+        """ a = time.time()
         with open(os.path.join(self.save_path, "play_list.txt"), "w") as f:
             for index, url in enumerate(self.play_list):
                 c = time.time()
                 max_retry = 10
+                is_finished = False
+
                 while max_retry:
                     try:
-                        r = requests.head(url,proxies={}) # first try to get header
-                        if r.status_code == 302:
-                            r.close()
-                            r = requests.head(url,proxies={},allow_redirects=True)
-                            url = r.history[-1].headers.get('location') # if not 302, history will don't exist!
-                        """ r = requests.head(url,proxies={},allow_redirects=True) # no header
+                        # first try to get header
+                        header = {
+                            'User-Agent': 'QYPlayer/Android/4.4.5;NetType/3G;QTP/1.1.4.3'}
+                        r = requests.head(url, proxies={}, headers=header)
                         while r.status_code == 302:
-                            #  print(r)
-                            print(f"{r.headers.get('Content-Length')}  {r.headers.get('Accept-Ranges')}")
-                            # print(f"{r.headers.get('location')}")
-                            url = r.headers.get('location')
                             r.close()
-                            r = requests.head(url) """
+                            r = requests.head(
+                                url, proxies={}, allow_redirects=True)
+                            # if not 302, history will don't exist!
+                            url = r.history[-1].headers.get('location')
+                        if r.status_code >= 400:
+                            raise ConnectionError(
+                                f"Connection failed! Response {r.status_code}")
+                        # get ts info
                         file_size = r.headers.get('Content-Length')
-                        self.accept_range = r.headers.get('Accept-Ranges') or self.accept_range
+                        self.accept_range = r.headers.get(
+                            'Accept-Ranges') or self.accept_range
                         if file_size is None:
                             file_size = 0
                         self.ts_size.append(int(file_size))
                         self.total_size += int(file_size)
                         self.play_list[index] = url
+                        is_finished = True
                         f.write(url)
                         f.write("\n")
                         d = time.time()
@@ -153,17 +171,23 @@ class DecodeM3u8File:
                             f"total number: {len(self.play_list)}, cur {index} ts size: {(int(file_size)/1024.0):05.2f} KB. spent {(d - c):05.2f} seconds")
                         break
                     except Exception as e:
-                        self.ts_size.append(0)
-                        print(f"cur {index} ts error {e}. remain retry times {max_retry - 1}")
                         max_retry -= 1
+                        print(
+                            f"cur {index} ts error {e}. remain retry times {max_retry}")
+
+                if not is_finished:
+                    self.ts_size.append(0)
+                    with open(os.path.join(self.save_path, 'error.log'), 'w') as f:
+                        pass
+
         b = time.time()
         print(
-            f"m3u8 analyzes finished! spent time: {(b - a):05.2f} start to download {(self.total_size/1024.0):07.2f}.")
+            f"m3u8 analyzes finished! spent time: {(b - a):05.2f} start to download {(self.total_size/1024.0):07.2f}.") """
 
     def get_ts(self, url, file_name, ts_size, start=None, end=None):
         ts_name = file_name + ".ts"
         downloader = MultipleThreadDownloader(
-            url=url, save_path=self.save_path, file_name=ts_name, file_size=ts_size, cryptor=self.cryptor)
+            url=url, save_path=self.save_path, file_name=ts_name, file_size=ts_size, cryptor=self.cryptor, thread_num=8)
         if start is None and end is None:
             downloader.run()
         else:
@@ -199,25 +223,43 @@ class DecodeM3u8File:
     def run(self):
         self.analyze_m3u8()
 
-        self.bar = tqdm(total=self.total_size/1024,
-                        desc=f'download file：{self.vedio_name}')
+        """ self.bar = tqdm(total=self.total_size/1024,
+                        desc=f'download file：{self.vedio_name}') """
 
         # try to download
         error_log = open(os.path.join(self.save_path, 'error.log'), 'w')
         error_log, os.close
         thread_list = []
-        for index, real_url in enumerate(self.play_list):
+        """ for index, url in enumerate(self.play_list):
             file_name = str(index).zfill(4)
             for num in range(0, self.download_ts_nums):
                 thread = threading.Thread(
-                    target=self.get_ts, args=(real_url, file_name, self.ts_size[index]))
+                    target=self.get_ts, args=(url, file_name, 0))
                 thread.start()
                 thread_list.append(thread)
                 with open(os.path.join(self.save_path, "megreList.txt"), 'a') as m:
                     m.write(f"file '{file_name + '.ts'}'\n")
             for i in thread_list:
                 i.join()
-                self.bar.update(self.ts_size[index]/1024)
+                # self.bar.update(self.ts_size[index]/1024) """
+        counter = 0
+        for url in self.play_list[0:len(self.play_list):self.download_ts_nums]:
+            for index in range(0, self.download_ts_nums):
+                if (counter * self.download_ts_nums + index) >= len(self.play_list):
+                    break
+                file_name = str(counter * self.download_ts_nums +
+                                index).zfill(4)
+                thread = threading.Thread(
+                    target=self.get_ts, args=(url, file_name, 0))
+                thread.start()
+                thread_list.append(thread)
+                with open(os.path.join(self.save_path, "megreList.txt"), 'a') as m:
+                    m.write(f"file '{file_name + '.ts'}'\n")
+            for i in range(0, self.download_ts_nums):
+                if (i + counter * self.download_ts_nums) >= len(thread_list):
+                    break
+                thread_list[i + counter * self.download_ts_nums].join()
+            counter += 1
 
         # retry
         ''' i = 0
@@ -244,18 +286,22 @@ if __name__ == '__main__':
         root.withdraw()
         vedio_name = config["vedio_name"]
         m3u8_url = config["m3u8_url"]
-        m3u8_file = filedialog.askopenfilename()
-        save_path = filedialog.askdirectory()
         prefix_url = config["prefix_url"]
         key_url = config["key_url"]
+        m3u8_file = filedialog.askopenfilename()
+        save_path = filedialog.askdirectory()
         playlist = filedialog.askopenfilename()
+        # key_path = filedialog.askopenfilename()
+        # with open(key_path,'rb') as f:
+        #    key=f.read()
         try:
-            Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
-                                        prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name, download_ts_nums=1)
+            # Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
+            #                             prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name, download_ts_nums=1)
             # Downloader.run()
 
-            download_from_playlist(playlist=playlist,save_path=save_path,start_line=293,end_line=294)
-            Downloader.megre_mp4(vedio_name=vedio_name)
+            download_from_playlist(
+                playlist=playlist, save_path=save_path, end_line=1)
+            # Downloader.megre_mp4(vedio_name=vedio_name)
         except Exception as e:
             print(e)
     else:

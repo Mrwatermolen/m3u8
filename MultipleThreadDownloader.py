@@ -4,6 +4,7 @@ import threading
 import os
 import time
 from tkinter.constants import NO
+from tkinter.filedialog import test
 
 import requests
 from tqdm import tqdm
@@ -13,7 +14,7 @@ lock = threading.Lock()
 
 
 class MultipleThreadDownloader(object):
-    def __init__(self, url, save_path, file_name, thread_num=1, file_size=0, accept_ranges='bytes', cryptor=None):
+    def __init__(self, url, save_path, file_name, thread_num=8, file_size=0, accept_ranges='bytes', cryptor=None):
         super(MultipleThreadDownloader, self).__init__()
         self.url = url
         self.save_path = save_path
@@ -23,21 +24,29 @@ class MultipleThreadDownloader(object):
         self.accept_ranges = accept_ranges
         self.cryptor = cryptor
 
+        self.headers = {
+            'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'}
         self.is_complete = True
 
     def get_range(self):
 
         # Whether it can be to split
         if self.file_size == 0 or self.accept_ranges is None:
+            if 'data.video.iqiyi' in self.url:
+                self.headers['User-Agent'] = 'QYPlayer/Android/4.4.5;NetType/3G;QTP/1.1.4.3'
             # res = requests.head(self.url,allow_redirects=True) # fuck iqiyi: <Response [302]>. set {allow_redirects=True} will lost arg: Range
             # 'set {allow_redirects=True} will lost arg: Range' is wrong. sometime
-            res = requests.head(self.url)
+            res = requests.head(self.url, headers=self.headers, proxies={})
+
             while res.status_code == 302:
-                self.url = res.headers.get('location')
+                # self.url = res.headers.get('location')
                 # print(f"{res.headers.get('Content-Length')}  {res.headers.get('Accept-Ranges')}")
                 # print(f"{res.headers.get('location')}")
+                # res = requests.head(res.headers.get('location'))
+                self.headers['Referer'] = self.url
+                self.url = res.headers.get('location')
+                res = requests.head(self.url, headers=self.headers, proxies={})
                 res.close()
-                res = requests.head(self.url)
             # print(res.headers)
 
             file_size = int(res.headers.get('Content-Length'))
@@ -58,18 +67,9 @@ class MultipleThreadDownloader(object):
     def single_thread_download(self, start=None, end=None, chunk_size=1024, max_retry=10):
 
         # set header
-        if start is None and end is None:
+        if not (start is None and end is None):
             # Range accept different arg such as bytes or Bytes. TT
-            headers = {
-                'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)',
-                'Range': f'{self.accept_ranges}={start}-{end}',
-                'Accept-Encoding': '*'
-            }
-        else:
-            headers = {
-                'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)',
-                'Accept-Encoding': '*'
-            }
+            self.headers['Range'] = f'{self.accept_ranges}={start}-{end}'
         download_succeed = False
         data = []
         msg = ''
@@ -78,31 +78,39 @@ class MultipleThreadDownloader(object):
                 requests.adapters.DEFAULT_RETRIES = 10  # set times of recoonection
                 # s = requests.session()
                 res = requests.get(self.url, stream=True,
-                                   headers=headers, allow_redirects=True, proxies={})
+                                   headers=self.headers, allow_redirects=False, proxies={})
+                while res.status_code == 302:
+                    self.headers['Referer'] = self.url
+                    self.url = res.headers.get('location')
+                    res.close()
+                    res = requests.get(self.url, stream=True,
+                                       headers=self.headers, allow_redirects=False, proxies={})
+                if res.status_code >= 400:
+                    raise ValueError(f"Respone error:{res.status_code}")
+
                 for chunk in res.iter_content(chunk_size=chunk_size):
                     data.append(chunk)
                     if not self.bar is None:
-                        self.bar.update(len(chunk)/chunk_size)
+                        # print(f"{self.file_name}。显示：{self.file_size/1024}KB。 更新：{len(chunk)/chunk_size}")
+                        self.bar.update(len(chunk))
                 download_succeed = True
                 break
             except Exception as e:
                 download_succeed = False
-                msg = f"file:{self.file_name} block: {start}-{end} occurs errors! Error: {e}\n remain times:{max_retry - 1}"
+                msg = f"time: {time.ctime()} file:{self.file_name} block: {start}-{end} occurs errors! Error: {e}\n remain times:{max_retry - 1} \n"
                 print(msg)
                 max_retry -= 1
 
         if download_succeed:
             with lock:  # Process lock protects file from being wrote in same time, but actually it can be commented out because local variable is safe
                 # the file pointer can move anywhere in rb mode but
-                if not start is None:
-                    with open(os.path.join(self.save_path, self.file_name), 'rb+') as file:
+                with open(os.path.join(self.save_path, self.file_name), 'rb+') as file:
+                    if start is None:
+                        file.seek(0)
+                    else:
                         file.seek(start)
-                        for temp in data:
-                            file.write(temp)
-                else:
-                    with open(os.path.join(self.save_path, self.file_name), 'wb') as file:
-                        for temp in data:
-                            file.write(temp)
+                    for temp in data:
+                        file.write(temp)
         else:
             with lock:
                 error_log = open(os.path.join(
@@ -121,10 +129,12 @@ class MultipleThreadDownloader(object):
         thread_list = []
         try:
             parts = self.get_range()
-            self.bar = tqdm(total=(self.file_size/1024),
+            # print(f"{self.file_name}。传入：{self.file_size}B , 显示：{self.file_size/1024}KB")
+            self.bar = tqdm(total=(self.file_size),
                             desc=f'download file：{self.file_name}')
         except Exception as e:
-            print(f"get_range() occurs error! Error: {e}")
+            print(
+                f"get_range() occurs error! Error: {e} \n try to single thread download")
             parts = [(None, None)]
             self.bar = None
 

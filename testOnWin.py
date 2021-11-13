@@ -1,10 +1,11 @@
+from logging import fatal
 from tqdm import tqdm
 from re import T
 import time
 import tkinter
 import os
 from tkinter import filedialog
-# from multipleThreadDownloader import MultipleThreadDownloader
+from multipleThreadDownloader import MultipleThreadDownloader
 import requests
 from requests.api import head
 
@@ -153,6 +154,48 @@ manually finding real url! spent: 19.976. size 6146472  bytes
 manually finding real url! spent: 34.649. size 4737412  bytes
 """
 
-# Conclusion: real url(in default mode) > True > manual
+# (Wrong!) Conclusion: real url(in default mode) > True > manual
 #   1: you should use True mode in MultipleThreadDownloader, cause you can get the real url. Even though you have gotten the url which will be redirect, True mode will always be good choice.
-#   2: 
+#   2:
+# allow_redirects = True will lost Referen.
+# 4
+# 813.05 seconds
+''' headers = headers = {
+    'User-Agent': 'QYPlayer/Android/4.4.5;NetType/3G;QTP/1.1.4.3',  # !
+    'Accept-Encoding': '*'
+} '''
+""" headers = headers = {
+    'User-Agent': 'QYPlayer/Android/4.4.5;NetType/3G;QTP/1.1.4.3',  # !
+    'Accept-Encoding': '*',
+    'Connection': 'Keep-Alive',
+    'Range': 'bytes=0-0',
+}
+root = tkinter.Tk()
+root.withdraw()
+
+m3u8 = filedialog.askopenfilename()
+save_path = filedialog.askdirectory()
+play_list = []
+with open(m3u8, 'r') as f:
+    all_content = f.read().split("\n")
+with open(os.path.join(save_path, 'play.txt'), 'w') as f:
+    for index, line in enumerate(all_content):
+        # get real url
+        if "#EXTINF" in line:
+            play_list.append(all_content[index + 1])
+            f.write(all_content[index + 1])
+start_time = time.time()
+for url in play_list:
+    a = time.time()
+    # res = requests.head(url=url,headers=headers,allow_redirects=False,proxies={},stream=True)
+    res = requests.get(url=url,headers=headers,allow_redirects=False,proxies={},stream=True)
+    while(res.status_code == 302):
+        url = res.headers.get('location')
+        # res.close()
+        # res = requests.head(url=url,headers=headers,allow_redirects=False,proxies={},stream=True)
+        res = requests.get(url=url,headers=headers,allow_redirects=False,proxies={},stream=True)
+    b = time.time()
+    print(f"{(b-a):05.3f} seconds, size {res.headers.get('Content-Length')}")
+end_time = time.time()
+print(f"{(end_time-start_time):05.2f} seconds")
+ """
