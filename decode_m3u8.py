@@ -1,31 +1,18 @@
 # -*- coding:utf-
 
-from tkinter.constants import FALSE
 from requests.api import head
 from multipleThreadDownloader import MultipleThreadDownloader
 from contextlib import closing
 import binascii
 import os
 import time
-import json
+
 import re
 import threading
 
 import requests
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from Crypto.Cipher import AES  # pip3 install pycryptodome
 from tqdm import tqdm
-
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-
-lock = threading.Lock()
-
-DEBUGMODE = False
-
-if DEBUGMODE:
-    import tkinter
-    from tkinter import filedialog
-
 
 def download_from_playlist(playlist, save_path, start_line=None, end_line=None, key=None, cryptor=None, num=1):
     with open(playlist, 'r') as f:
@@ -75,7 +62,7 @@ class DecodeM3u8File:
         download_ts_nums: number of ts downloaded at the same time
     """
 
-    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=4):
+    def __init__(self, m3u8_file, m3u8_url, save_path, prefix_url, key_url, vedio_name, download_ts_nums=1):
         super(DecodeM3u8File, self).__init__()
         self.m3u8_file = m3u8_file
         self.m3u8_url = m3u8_url
@@ -86,7 +73,6 @@ class DecodeM3u8File:
         self.vedio_name = vedio_name
         self.download_ts_nums = download_ts_nums
 
-        self.is_encrypted = False
         self.play_list = []
         self.ts_size = []
         self.total_size = 0
@@ -111,13 +97,14 @@ class DecodeM3u8File:
 
         # analyze
         is_in_header = True
+        is_encrypted = False
         for index, line in enumerate(self.file_line):
             # whether this vedio is decrypted
-            if is_in_header and (not self.is_encrypted) and "EXT-X-KEY" in line:
-                self.is_encrypted = True
-                key_url_start = line.find("URI=")
-                key_url_end = line.find(",", key_url_start)
-                print(line[key_url_start:key_url_end])
+            if is_in_header and (not is_encrypted) and "EXT-X-KEY" in line:
+                is_encrypted = True
+                # key_url_start = line.find("URI=")
+                # key_url_end = line.find(",", key_url_start)
+                # print(line[key_url_start:key_url_end])
                 self.get_decrypted_key()
             # get real url
             if "#EXTINF" in line:
@@ -230,18 +217,6 @@ class DecodeM3u8File:
         error_log = open(os.path.join(self.save_path, 'error.log'), 'w')
         error_log, os.close
         thread_list = []
-        """ for index, url in enumerate(self.play_list):
-            file_name = str(index).zfill(4)
-            for num in range(0, self.download_ts_nums):
-                thread = threading.Thread(
-                    target=self.get_ts, args=(url, file_name, 0))
-                thread.start()
-                thread_list.append(thread)
-                with open(os.path.join(self.save_path, "megreList.txt"), 'a') as m:
-                    m.write(f"file '{file_name + '.ts'}'\n")
-            for i in thread_list:
-                i.join()
-                # self.bar.update(self.ts_size[index]/1024) """
         counter = 0
         for url in self.play_list[0:len(self.play_list):self.download_ts_nums]:
             for index in range(0, self.download_ts_nums):
@@ -267,53 +242,4 @@ class DecodeM3u8File:
             if not self.ts_finish[index]:
                 file_name = str(index).zfill(4) '''
 
-        self.megre_mp4(vedio_name)  # save path cann't include ' '
-
-
-if __name__ == '__main__':
-    with open(file=os.path.join(os.getcwd(), "config.json"), mode="r") as f:
-        config = json.load(f)
-        print(config)
-    vedio_name = config["vedio_name"]
-    m3u8_url = config["m3u8_url"]
-    m3u8_file = config["m3u8_file"]
-    save_path = config["save_path"]
-    prefix_url = config["prefix_url"]
-    key_url = config["key_url"]
-
-    if DEBUGMODE:
-        root = tkinter.Tk()
-        root.withdraw()
-        vedio_name = config["vedio_name"]
-        m3u8_url = config["m3u8_url"]
-        prefix_url = config["prefix_url"]
-        key_url = config["key_url"]
-        m3u8_file = filedialog.askopenfilename()
-        save_path = filedialog.askdirectory()
-        playlist = filedialog.askopenfilename()
-        # key_path = filedialog.askopenfilename()
-        # with open(key_path,'rb') as f:
-        #    key=f.read()
-        try:
-            # Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
-            #                             prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name, download_ts_nums=1)
-            # Downloader.run()
-
-            download_from_playlist(
-                playlist=playlist, save_path=save_path, end_line=1)
-            # Downloader.megre_mp4(vedio_name=vedio_name)
-        except Exception as e:
-            print(e)
-    else:
-        try:
-            if not os.path.exists(save_path):
-                os.mkdir(save_path)
-            start_time = time.time()
-            Downloader = DecodeM3u8File(m3u8_file=m3u8_file, m3u8_url=m3u8_url, save_path=save_path,
-                                        prefix_url=prefix_url, key_url=key_url, vedio_name=vedio_name)
-            Downloader.run()
-            end_time = time.time()
-            print(
-                f"[Message] Running time: {int(end_time - start_time)} Seconds")
-        except BaseException as e:
-            print(e)
+        self.megre_mp4(self.vedio_name)  # save path cann't include ' '

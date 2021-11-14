@@ -3,12 +3,10 @@
 import threading
 import os
 import time
-from tkinter.constants import NO
 from tkinter.filedialog import test
 
 import requests
 from tqdm import tqdm
-from Crypto.Cipher import AES
 
 lock = threading.Lock()
 
